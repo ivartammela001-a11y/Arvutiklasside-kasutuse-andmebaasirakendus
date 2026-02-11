@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bookings>
+    <booking>
+        <classroom_name>D-101</classroom_name>
+        <user_email>piret.puu@kool.ee</user_email>
+        <lesson_type>Praktikum</lesson_type>
+        <date>2026-02-16</date>
+        <start_time>10:00</start_time>
+        <end_time>11:30</end_time>
+        <participants_count>20</participants_count>
+        <description>Veebiarenduse praktikum</description>
+    </booking>
+    <booking>
+        <classroom_name>D-205</classroom_name>
+        <user_email>jaan.jaanson@kool.ee</user_email>
+        <lesson_type>Loeng</lesson_type>
+        <date>2026-02-16</date>
+        <start_time>08:00</start_time>
+        <end_time>09:30</end_time>
+        <participants_count>28</participants_count>
+        <description>Programmeerimise loeng</description>
+    </booking>
+    <booking>
+        <classroom_name>E-301</classroom_name>
+        <user_email>liina.lepik@kool.ee</user_email>
+        <lesson_type>Seminar</lesson_type>
+        <date>2026-02-17</date>
+        <start_time>13:00</start_time>
+        <end_time>14:30</end_time>
+        <participants_count>16</participants_count>
+        <description>IT-turvalisuse seminar</description>
+    </booking>
+    <booking>
+        <classroom_name>D-101</classroom_name>
+        <user_email>piret.puu@kool.ee</user_email>
+        <lesson_type>Eksam</lesson_type>
+        <date>2026-02-18</date>
+        <start_time>09:00</start_time>
+        <end_time>11:00</end_time>
+        <participants_count>22</participants_count>
+        <description>Programmeerimise eksam</description>
+    </booking>
+</bookings>

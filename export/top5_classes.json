@@ -1,0 +1,37 @@
+[
+  {
+    "name": "A-201",
+    "building": "A-hoone",
+    "capacity": 30,
+    "broneeringuid_kokku": 2,
+    "tunde_kokku": 3
+  },
+  {
+    "name": "D-101",
+    "building": "D-hoone",
+    "capacity": 22,
+    "broneeringuid_kokku": 2,
+    "tunde_kokku": 3.5
+  },
+  {
+    "name": "A-202",
+    "building": "A-hoone",
+    "capacity": 25,
+    "broneeringuid_kokku": 1,
+    "tunde_kokku": 1.5
+  },
+  {
+    "name": "B-101",
+    "building": "B-hoone",
+    "capacity": 20,
+    "broneeringuid_kokku": 1,
+    "tunde_kokku": 1.5
+  },
+  {
+    "name": "B-305",
+    "building": "B-hoone",
+    "capacity": 35,
+    "broneeringuid_kokku": 1,
+    "tunde_kokku": 1.5
+  }
+]

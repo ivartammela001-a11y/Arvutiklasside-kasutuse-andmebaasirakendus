@@ -1,0 +1,23 @@
+{
+  "name": "arvutiklasside-rakendus",
+  "module": "src/index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun --hot src/index.ts",
+    "start": "bun src/index.ts",
+    "import": "bun ../import/import.ts",
+    "export": "bun ../export/export.ts",
+    "backup": "bun ../backup/backup.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^5.3.5",
+    "hono": "^4.11.9"
+  }
+}

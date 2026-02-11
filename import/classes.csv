@@ -1,0 +1,5 @@
+name,building,floor,capacity,has_projector,has_webcam,description
+D-101,D-hoone,1,22,1,0,Programmeerimise labor
+D-205,D-hoone,2,30,1,1,Multimeedia klass
+E-301,E-hoone,3,18,0,0,Vorgutehnika labor
+E-102,E-hoone,1,24,1,0,Tarkvara testimise klass

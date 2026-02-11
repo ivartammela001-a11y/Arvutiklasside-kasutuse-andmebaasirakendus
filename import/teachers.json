@@ -1,0 +1,7 @@
+[
+  { "name": "Piret Puu", "email": "piret.puu@kool.ee", "role": "opetaja" },
+  { "name": "Jaan Jaanson", "email": "jaan.jaanson@kool.ee", "role": "opetaja" },
+  { "name": "Liina Lepik", "email": "liina.lepik@kool.ee", "role": "opetaja" },
+  { "name": "RIF-22", "email": "rif22@kool.ee", "role": "grupp" },
+  { "name": "TAK-23", "email": "tak23@kool.ee", "role": "grupp" }
+]
