@@ -1,57 +1,48 @@
 # Andmebaasi varundamine ja taastamine
 
-## Varundamise meetodid
+## Varundamise meetod
 
-### Meetod 1: SQL dump
+Kasutame `mysqldump` tööriista, mis loob SQL dump-faili kõigi tabelite
+struktuuride, andmete ja triggeritega. See on inimloetav ja porditav.
 
-SQL dump loob tekstifaili, mis sisaldab koiki CREATE TABLE ja INSERT lauseid.
-See on inimloetav ja porditav erinevate andmebaaside vahel.
-
-### Meetod 2: Faili koopia
-
-SQLite andmebaas on yks fail. Lihtne failikopia on kiireim viis varukoopia
-tegemiseks.
-
-## Varundamise kaivitamine
+## Varundamise käivitamine
 
 ```bash
-cd app
 bun run backup
 
-# voi otse:
-bun ../backup/backup.ts
+# või otse:
+bun backup/backup.ts
 ```
 
 Tulemus:
-- `backup/backup_YYYY-MM-DD.sql` - SQL dump
-- `backup/backup_YYYY-MM-DD.db` - Andmebaasi koopia
+- `backup/backup_YYYY-MM-DD.sql` - täielik SQL dump (struktuur + andmed + triggerid)
 
 ## Taastamine SQL dump'ist
 
 ```bash
-# Kustuta olemasolev andmebaas
-rm data/klassiruumid.db
-
-# Taasta SQL dump'ist
-sqlite3 data/klassiruumid.db < backup/backup_2026-02-11.sql
+# Kustuta andmebaas ja taasta dump'ist
+mysql -u root -e "DROP DATABASE IF EXISTS klassiruumid;"
+mysql -u root < backup/backup_2026-02-11.sql
 ```
 
-## Taastamine failikoopiast
-
-```bash
-# Kopeeri varukoopia tagasi
-cp backup/backup_2026-02-11.db data/klassiruumid.db
-```
-
-## Taastamise test (todistus)
+## Taastamise test (tõendus)
 
 ### Samm 1: Enne kustutamist
 
 ```bash
-$ sqlite3 data/klassiruumid.db "SELECT COUNT(*) FROM booking;"
-9
-$ sqlite3 data/klassiruumid.db "SELECT COUNT(*) FROM classroom;"
-9
+$ mysql -u root klassiruumid -e "SELECT COUNT(*) AS broneeringuid FROM booking;"
++---------------+
+| broneeringuid |
++---------------+
+|             9 |
++---------------+
+
+$ mysql -u root klassiruumid -e "SELECT COUNT(*) AS klasse FROM classroom;"
++--------+
+| klasse |
++--------+
+|      9 |
++--------+
 ```
 
 ### Samm 2: Varundamine
@@ -59,26 +50,38 @@ $ sqlite3 data/klassiruumid.db "SELECT COUNT(*) FROM classroom;"
 ```bash
 $ bun backup/backup.ts
 === ANDMEBAASI VARUNDAMINE ===
-Meetod 1: SQL dump...
-  SQL dump salvestatud: backup/backup_2026-02-11.sql
-Meetod 2: Andmebaasi faili koopia...
-  Faili koopia: backup/backup_2026-02-11.db
+Meetod: mysqldump...
+  Varukoopia salvestatud: backup/backup_2026-02-11.sql
+
+=== VARUKOOPIA STATISTIKA ===
+  lesson_type: 5 rida
+  classroom: 9 rida
+  user_or_group: 9 rida
+  booking: 9 rida
 ```
 
 ### Samm 3: Andmete kustutamine (kontrollitud test)
 
 ```bash
-$ sqlite3 data/klassiruumid.db "DELETE FROM booking;"
-$ sqlite3 data/klassiruumid.db "SELECT COUNT(*) FROM booking;"
-0
+$ mysql -u root klassiruumid -e "DELETE FROM booking;"
+$ mysql -u root klassiruumid -e "SELECT COUNT(*) AS broneeringuid FROM booking;"
++---------------+
+| broneeringuid |
++---------------+
+|             0 |
++---------------+
 ```
 
 ### Samm 4: Taastamine
 
 ```bash
-$ cp backup/backup_2026-02-11.db data/klassiruumid.db
-$ sqlite3 data/klassiruumid.db "SELECT COUNT(*) FROM booking;"
-9
+$ mysql -u root < backup/backup_2026-02-11.sql
+$ mysql -u root klassiruumid -e "SELECT COUNT(*) AS broneeringuid FROM booking;"
++---------------+
+| broneeringuid |
++---------------+
+|             9 |
++---------------+
 ```
 
 Andmed on edukalt taastatud!

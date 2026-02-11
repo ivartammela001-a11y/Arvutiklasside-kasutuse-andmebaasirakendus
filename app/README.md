@@ -91,8 +91,7 @@ bun run backup
 ```
 
 Loob varukoopia kausta `backup/`:
-- `backup_YYYY-MM-DD.sql` - SQL dump
-- `backup_YYYY-MM-DD.db` - andmebaasi koopia
+- `backup_YYYY-MM-DD.sql` - mysqldump (struktuur + andmed + triggerid)
 
 ## Projekti struktuur
 
