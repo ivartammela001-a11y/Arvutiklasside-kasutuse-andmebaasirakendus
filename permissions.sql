@@ -1,64 +1,58 @@
 -- ============================================================
 -- OIGUSTE HALDAMINE (Permissions Management)
--- ============================================================
--- NB! See fail on TEOREETILINE demonstratsioon MariaDB/PostgreSQL suuntaksiga.
--- SQLite EI toeta GRANT/REVOKE lauseid.
--- Tegelik oiguste kontroll on rakenduse tasemel (vt app/src/middleware/auth.ts)
+-- MySQL 8.x / MariaDB
 -- ============================================================
 
+USE klassiruumid;
+
 -- ============================================================
--- 1. ROLLIDE LOOMINE
+-- 1. KASUTAJATE LOOMINE
 -- ============================================================
 
-CREATE ROLE admin_role;
-CREATE ROLE viewer_role;
+-- Kustutame vanad kasutajad kui eksisteerivad
+DROP USER IF EXISTS 'admin_kasutaja'@'localhost';
+DROP USER IF EXISTS 'vaataja_kasutaja'@'localhost';
+
+-- Loome kasutajad
+CREATE USER 'admin_kasutaja'@'localhost' IDENTIFIED BY 'Admin_parool_123!';
+CREATE USER 'vaataja_kasutaja'@'localhost' IDENTIFIED BY 'Vaataja_parool_456!';
 
 -- ============================================================
 -- 2. OIGUSTE ANDMINE (GRANT)
 -- ============================================================
 
--- Admin roll: taielikud oigused koikidele tabelitele
-GRANT SELECT, INSERT, UPDATE, DELETE ON classroom     TO admin_role;
-GRANT SELECT, INSERT, UPDATE, DELETE ON user_or_group  TO admin_role;
-GRANT SELECT, INSERT, UPDATE, DELETE ON booking        TO admin_role;
-GRANT SELECT, INSERT, UPDATE, DELETE ON lesson_type    TO admin_role;
+-- Admin kasutaja: taielikud oigused koikidele tabelitele
+GRANT SELECT, INSERT, UPDATE, DELETE ON klassiruumid.classroom     TO 'admin_kasutaja'@'localhost';
+GRANT SELECT, INSERT, UPDATE, DELETE ON klassiruumid.user_or_group TO 'admin_kasutaja'@'localhost';
+GRANT SELECT, INSERT, UPDATE, DELETE ON klassiruumid.booking       TO 'admin_kasutaja'@'localhost';
+GRANT SELECT, INSERT, UPDATE, DELETE ON klassiruumid.lesson_type   TO 'admin_kasutaja'@'localhost';
 
--- Vaataja roll: ainult lugemise oigused
-GRANT SELECT ON classroom     TO viewer_role;
-GRANT SELECT ON user_or_group  TO viewer_role;
-GRANT SELECT ON booking        TO viewer_role;
-GRANT SELECT ON lesson_type    TO viewer_role;
+-- Vaataja kasutaja: ainult lugemise oigused
+GRANT SELECT ON klassiruumid.classroom     TO 'vaataja_kasutaja'@'localhost';
+GRANT SELECT ON klassiruumid.user_or_group TO 'vaataja_kasutaja'@'localhost';
+GRANT SELECT ON klassiruumid.booking       TO 'vaataja_kasutaja'@'localhost';
+GRANT SELECT ON klassiruumid.lesson_type   TO 'vaataja_kasutaja'@'localhost';
 
--- ============================================================
--- 3. KASUTAJATE LOOMINE JA ROLLIDE OMISTAMINE
--- ============================================================
-
-CREATE USER 'admin_kasutaja'@'localhost' IDENTIFIED BY 'tugev_parool_123!';
-CREATE USER 'vaataja_kasutaja'@'localhost' IDENTIFIED BY 'vaataja_parool_456!';
-
-GRANT admin_role  TO 'admin_kasutaja'@'localhost';
-GRANT viewer_role TO 'vaataja_kasutaja'@'localhost';
-
--- Rollide aktiveerimine (MariaDB/MySQL)
-SET DEFAULT ROLE admin_role  FOR 'admin_kasutaja'@'localhost';
-SET DEFAULT ROLE viewer_role FOR 'vaataja_kasutaja'@'localhost';
+-- Oiguste rakendamine
+FLUSH PRIVILEGES;
 
 -- ============================================================
--- 4. OIGUSTE KONTROLL
+-- 3. OIGUSTE KONTROLL
 -- ============================================================
 
 SHOW GRANTS FOR 'admin_kasutaja'@'localhost';
 SHOW GRANTS FOR 'vaataja_kasutaja'@'localhost';
 
 -- ============================================================
--- 5. OIGUSTE EEMALDAMINE (REVOKE)
+-- 4. OIGUSTE EEMALDAMINE (REVOKE)
 -- ============================================================
 
 -- Naite: eemaldame vaatajalt oiguse naha kasutajate andmeid
-REVOKE SELECT ON user_or_group FROM viewer_role;
+REVOKE SELECT ON klassiruumid.user_or_group FROM 'vaataja_kasutaja'@'localhost';
 
 -- Kontrolli, et oigus on eemaldatud
 SHOW GRANTS FOR 'vaataja_kasutaja'@'localhost';
 
 -- Taastame oiguse (demonstratsiooniks)
-GRANT SELECT ON user_or_group TO viewer_role;
+GRANT SELECT ON klassiruumid.user_or_group TO 'vaataja_kasutaja'@'localhost';
+FLUSH PRIVILEGES;

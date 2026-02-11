@@ -1,42 +1,55 @@
 import { Hono } from "hono";
-import db from "../db";
+import pool from "../db";
 import { layout } from "../views/layout";
-import { isAdmin, roleQuery } from "../middleware/auth";
+import { isAdmin } from "../middleware/auth";
 
 export const bookingRoutes = new Hono();
 
-// Abifunktsioon: lingid säilitavad rolli
 function rq(c: any): string {
   return c.get("role") ? `?role=${c.get("role")}` : "";
 }
 
-// LIST - broneeringute nimekiri
-bookingRoutes.get("/", (c) => {
+// Abifunktsioon: TIME väärtuse kuvamine HH:MM formaadis
+function fmtTime(t: any): string {
+  if (!t) return "";
+  const s = String(t);
+  // MySQL TIME võib tulla "HH:MM:SS" formaadis
+  return s.length > 5 ? s.slice(0, 5) : s;
+}
+
+// Abifunktsioon: DATE kuvamine YYYY-MM-DD
+function fmtDate(d: any): string {
+  if (!d) return "";
+  if (d instanceof Date) return d.toISOString().slice(0, 10);
+  return String(d).slice(0, 10);
+}
+
+// LIST
+bookingRoutes.get("/", async (c) => {
   const role = c.get("role");
   const msg = c.req.query("msg");
-  const bookings = db
-    .query(
-      `SELECT b.*, c.name as classroom_name, u.name as user_name,
-              lt.name as lesson_type_name
-       FROM booking b
-       JOIN classroom c ON b.classroom_id = c.id
-       JOIN user_or_group u ON b.user_id = u.id
-       LEFT JOIN lesson_type lt ON b.lesson_type_id = lt.id
-       ORDER BY b.date DESC, b.start_time ASC`
-    )
-    .all() as any[];
+
+  const [bookings] = await pool.query(
+    `SELECT b.*, c.name as classroom_name, u.name as user_name,
+            lt.name as lesson_type_name
+     FROM booking b
+     JOIN classroom c ON b.classroom_id = c.id
+     JOIN user_or_group u ON b.user_id = u.id
+     LEFT JOIN lesson_type lt ON b.lesson_type_id = lt.id
+     ORDER BY b.date DESC, b.start_time ASC`
+  );
 
   let msgHtml = "";
   if (msg === "created") msgHtml = `<div class="alert alert-success">Broneering edukalt lisatud!</div>`;
   if (msg === "updated") msgHtml = `<div class="alert alert-success">Broneering edukalt muudetud!</div>`;
   if (msg === "deleted") msgHtml = `<div class="alert alert-success">Broneering kustutatud!</div>`;
 
-  const rows = bookings
+  const rows = (bookings as any[])
     .map(
-      (b: any) => `
+      (b) => `
     <tr id="booking-${b.id}">
-      <td>${b.date}</td>
-      <td>${b.start_time} - ${b.end_time}</td>
+      <td>${fmtDate(b.date)}</td>
+      <td>${fmtTime(b.start_time)} - ${fmtTime(b.end_time)}</td>
       <td>${b.classroom_name}</td>
       <td>${b.user_name}</td>
       <td>${b.lesson_type_name || "-"}</td>
@@ -61,7 +74,7 @@ bookingRoutes.get("/", (c) => {
         ${isAdmin(c) ? `<a href="/bookings/new${rq(c)}" class="btn btn-success">+ Lisa uus</a>` : ""}
       </div>
       ${
-        bookings.length === 0
+        (bookings as any[]).length === 0
           ? `<p class="empty">Broneeringuid ei leitud.</p>`
           : `<table>
         <thead>
@@ -78,14 +91,14 @@ bookingRoutes.get("/", (c) => {
   return c.html(layout("Broneeringud", content, role));
 });
 
-// NEW - uue broneeringu vorm
-bookingRoutes.get("/new", (c) => {
+// NEW
+bookingRoutes.get("/new", async (c) => {
   const role = c.get("role");
   if (!isAdmin(c)) return c.redirect(`/bookings${rq(c)}`);
 
-  const classrooms = db.query("SELECT * FROM classroom ORDER BY name").all() as any[];
-  const users = db.query("SELECT * FROM user_or_group ORDER BY name").all() as any[];
-  const lessonTypes = db.query("SELECT * FROM lesson_type ORDER BY name").all() as any[];
+  const [classrooms] = await pool.query("SELECT * FROM classroom ORDER BY name");
+  const [users] = await pool.query("SELECT * FROM user_or_group ORDER BY name");
+  const [lessonTypes] = await pool.query("SELECT * FROM lesson_type ORDER BY name");
 
   const content = `
     <div class="card">
@@ -97,14 +110,14 @@ bookingRoutes.get("/new", (c) => {
             <label>Klass *</label>
             <select name="classroom_id" required>
               <option value="">-- Vali klass --</option>
-              ${classrooms.map((cl: any) => `<option value="${cl.id}">${cl.name} (${cl.building}, ${cl.capacity} kohta)</option>`).join("")}
+              ${(classrooms as any[]).map((cl) => `<option value="${cl.id}">${cl.name} (${cl.building}, ${cl.capacity} kohta)</option>`).join("")}
             </select>
           </div>
           <div>
             <label>Kasutaja *</label>
             <select name="user_id" required>
               <option value="">-- Vali kasutaja --</option>
-              ${users.map((u: any) => `<option value="${u.id}">${u.name} (${u.role})</option>`).join("")}
+              ${(users as any[]).map((u) => `<option value="${u.id}">${u.name} (${u.role})</option>`).join("")}
             </select>
           </div>
         </div>
@@ -113,7 +126,7 @@ bookingRoutes.get("/new", (c) => {
             <label>Tunni tuup</label>
             <select name="lesson_type_id">
               <option value="">-- Pole valitud --</option>
-              ${lessonTypes.map((lt: any) => `<option value="${lt.id}">${lt.name}</option>`).join("")}
+              ${(lessonTypes as any[]).map((lt) => `<option value="${lt.id}">${lt.name}</option>`).join("")}
             </select>
           </div>
           <div>
@@ -150,27 +163,28 @@ bookingRoutes.get("/new", (c) => {
   return c.html(layout("Uus broneering", content, role));
 });
 
-// CREATE - broneeringu loomine
+// CREATE
 bookingRoutes.post("/", async (c) => {
   const role = c.get("role");
   if (!isAdmin(c)) return c.redirect(`/bookings${rq(c)}`);
 
   const body = await c.req.parseBody();
-  const classroomId = Number(body.classroom_id);
-  const userId = Number(body.user_id);
-  const lessonTypeId = body.lesson_type_id ? Number(body.lesson_type_id) : null;
-  const date = String(body.date);
-  const startTime = String(body.start_time);
-  const endTime = String(body.end_time);
-  const participantsCount = Number(body.participants_count) || 0;
-  const description = String(body.description || "");
 
   try {
-    db.query(
+    await pool.query(
       `INSERT INTO booking (classroom_id, user_id, lesson_type_id, date, start_time, end_time, participants_count, description)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(classroomId, userId, lessonTypeId, date, startTime, endTime, participantsCount, description);
-
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        Number(body.classroom_id),
+        Number(body.user_id),
+        body.lesson_type_id ? Number(body.lesson_type_id) : null,
+        String(body.date),
+        String(body.start_time),
+        String(body.end_time),
+        Number(body.participants_count) || 0,
+        String(body.description || ""),
+      ]
+    );
     return c.redirect(`/bookings${rq(c)}&msg=created`);
   } catch (e: any) {
     const errorMsg = e.message.includes("kattuvad")
@@ -180,18 +194,19 @@ bookingRoutes.post("/", async (c) => {
   }
 });
 
-// EDIT - broneeringu muutmise vorm
-bookingRoutes.get("/:id/edit", (c) => {
+// EDIT
+bookingRoutes.get("/:id/edit", async (c) => {
   const role = c.get("role");
   if (!isAdmin(c)) return c.redirect(`/bookings${rq(c)}`);
 
   const id = c.req.param("id");
-  const booking = db.query("SELECT * FROM booking WHERE id = ?").get(id) as any;
+  const [rows] = await pool.query("SELECT * FROM booking WHERE id = ?", [id]);
+  const booking = (rows as any[])[0];
   if (!booking) return c.redirect(`/bookings${rq(c)}`);
 
-  const classrooms = db.query("SELECT * FROM classroom ORDER BY name").all() as any[];
-  const users = db.query("SELECT * FROM user_or_group ORDER BY name").all() as any[];
-  const lessonTypes = db.query("SELECT * FROM lesson_type ORDER BY name").all() as any[];
+  const [classrooms] = await pool.query("SELECT * FROM classroom ORDER BY name");
+  const [users] = await pool.query("SELECT * FROM user_or_group ORDER BY name");
+  const [lessonTypes] = await pool.query("SELECT * FROM lesson_type ORDER BY name");
 
   const content = `
     <div class="card">
@@ -202,13 +217,13 @@ bookingRoutes.get("/:id/edit", (c) => {
           <div>
             <label>Klass *</label>
             <select name="classroom_id" required>
-              ${classrooms.map((cl: any) => `<option value="${cl.id}" ${cl.id === booking.classroom_id ? "selected" : ""}>${cl.name} (${cl.building}, ${cl.capacity} kohta)</option>`).join("")}
+              ${(classrooms as any[]).map((cl) => `<option value="${cl.id}" ${cl.id === booking.classroom_id ? "selected" : ""}>${cl.name} (${cl.building}, ${cl.capacity} kohta)</option>`).join("")}
             </select>
           </div>
           <div>
             <label>Kasutaja *</label>
             <select name="user_id" required>
-              ${users.map((u: any) => `<option value="${u.id}" ${u.id === booking.user_id ? "selected" : ""}>${u.name} (${u.role})</option>`).join("")}
+              ${(users as any[]).map((u) => `<option value="${u.id}" ${u.id === booking.user_id ? "selected" : ""}>${u.name} (${u.role})</option>`).join("")}
             </select>
           </div>
         </div>
@@ -217,22 +232,22 @@ bookingRoutes.get("/:id/edit", (c) => {
             <label>Tunni tuup</label>
             <select name="lesson_type_id">
               <option value="">-- Pole valitud --</option>
-              ${lessonTypes.map((lt: any) => `<option value="${lt.id}" ${lt.id === booking.lesson_type_id ? "selected" : ""}>${lt.name}</option>`).join("")}
+              ${(lessonTypes as any[]).map((lt) => `<option value="${lt.id}" ${lt.id === booking.lesson_type_id ? "selected" : ""}>${lt.name}</option>`).join("")}
             </select>
           </div>
           <div>
             <label>Kuupaev *</label>
-            <input type="date" name="date" value="${booking.date}" required>
+            <input type="date" name="date" value="${fmtDate(booking.date)}" required>
           </div>
         </div>
         <div class="form-row">
           <div>
             <label>Algusaeg *</label>
-            <input type="time" name="start_time" value="${booking.start_time}" required>
+            <input type="time" name="start_time" value="${fmtTime(booking.start_time)}" required>
           </div>
           <div>
             <label>Loppaeg *</label>
-            <input type="time" name="end_time" value="${booking.end_time}" required>
+            <input type="time" name="end_time" value="${fmtTime(booking.end_time)}" required>
           </div>
         </div>
         <div class="form-row">
@@ -254,7 +269,7 @@ bookingRoutes.get("/:id/edit", (c) => {
   return c.html(layout("Muuda broneeringut", content, role));
 });
 
-// UPDATE - broneeringu uuendamine
+// UPDATE
 bookingRoutes.post("/:id/edit", async (c) => {
   const role = c.get("role");
   if (!isAdmin(c)) return c.redirect(`/bookings${rq(c)}`);
@@ -263,22 +278,22 @@ bookingRoutes.post("/:id/edit", async (c) => {
   const body = await c.req.parseBody();
 
   try {
-    db.query(
+    await pool.query(
       `UPDATE booking SET classroom_id = ?, user_id = ?, lesson_type_id = ?,
        date = ?, start_time = ?, end_time = ?, participants_count = ?, description = ?
-       WHERE id = ?`
-    ).run(
-      Number(body.classroom_id),
-      Number(body.user_id),
-      body.lesson_type_id ? Number(body.lesson_type_id) : null,
-      String(body.date),
-      String(body.start_time),
-      String(body.end_time),
-      Number(body.participants_count) || 0,
-      String(body.description || ""),
-      id
+       WHERE id = ?`,
+      [
+        Number(body.classroom_id),
+        Number(body.user_id),
+        body.lesson_type_id ? Number(body.lesson_type_id) : null,
+        String(body.date),
+        String(body.start_time),
+        String(body.end_time),
+        Number(body.participants_count) || 0,
+        String(body.description || ""),
+        id,
+      ]
     );
-
     return c.redirect(`/bookings${rq(c)}&msg=updated`);
   } catch (e: any) {
     const errorMsg = e.message.includes("kattuvad")
@@ -288,16 +303,11 @@ bookingRoutes.post("/:id/edit", async (c) => {
   }
 });
 
-// DELETE - broneeringu kustutamine
-bookingRoutes.post("/:id/delete", (c) => {
+// DELETE
+bookingRoutes.post("/:id/delete", async (c) => {
   if (!isAdmin(c)) return c.text("Keelatud", 403);
-
   const id = c.req.param("id");
-  db.query("DELETE FROM booking WHERE id = ?").run(id);
-
-  // HTMX puhul tagastab tühja (rida eemaldatakse), muidu redirect
-  if (c.req.header("HX-Request")) {
-    return c.html("");
-  }
+  await pool.query("DELETE FROM booking WHERE id = ?", [id]);
+  if (c.req.header("HX-Request")) return c.html("");
   return c.redirect(`/bookings${rq(c)}&msg=deleted`);
 });

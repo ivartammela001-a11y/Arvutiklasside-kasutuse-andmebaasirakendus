@@ -7,17 +7,26 @@ TAK25 grupi andmebaaside kursuse raames.
 
 - **Bun** - JavaScripti runtime
 - **Hono** - veebiraamistik
-- **SQLite** - andmebaas (bun:sqlite)
+- **MySQL** - andmebaas (mysql2)
 - **HTMX** - interaktiivsus ilma raskete raamistiketeta
 
 ## Kaivitamine
 
 ### Eeldused
 
-Arvutisse peab olema paigaldatud [Bun](https://bun.sh):
+Arvutisse peab olema paigaldatud:
+- [Bun](https://bun.sh) - JavaScripti runtime
+- [MySQL](https://dev.mysql.com/downloads/) - andmebaasiserver
 
 ```bash
+# Bun paigaldamine
 curl -fsSL https://bun.sh/install | bash
+
+# MySQL kaivitamine (macOS Homebrew)
+brew services start mysql
+
+# Andmebaasi loomine
+mysql -u root < ../schema.sql
 ```
 
 ### Paigaldamine ja kaivitamine
@@ -34,7 +43,7 @@ bun run dev
 bun run start
 ```
 
-Server kaivitub aadressil: **http://localhost:3000**
+Server kaivitub aadressil: **http://localhost:3001**
 
 ## Kasutamine
 
@@ -42,8 +51,8 @@ Server kaivitub aadressil: **http://localhost:3000**
 
 Rakenduses on kaks rolli, mida saab vahetada URL parameetriga:
 
-- **Admin**: `http://localhost:3000/?role=admin` - taielikud oigused (vaikimisi)
-- **Vaataja**: `http://localhost:3000/?role=viewer` - ainult lugemise oigused
+- **Admin**: `http://localhost:3001/?role=admin` - taielikud oigused (vaikimisi)
+- **Vaataja**: `http://localhost:3001/?role=viewer` - ainult lugemise oigused
 
 ### Pohifunktsioonid
 
@@ -105,13 +114,26 @@ app/
 
 ## Ekraanipildid
 
-_Lisa siia ekraanipildid rakenduse pohivaadetest._
+### Avaleht
+![Avaleht](screenshots/01_avaleht.png)
 
-### Broneeringute nimekiri
-<!-- ![Broneeringud](screenshots/bookings.png) -->
+### Broneeringute nimekiri (Admin)
+![Broneeringud](screenshots/02_broneeringud.png)
 
 ### Uue broneeringu lisamine
-<!-- ![Uus broneering](screenshots/new_booking.png) -->
+![Uus broneering](screenshots/03_uus_broneering.png)
+
+### Broneeringu muutmine
+![Muuda broneeringut](screenshots/04_muuda_broneering.png)
+
+### Arvutiklassid
+![Klassid](screenshots/05_klassid.png)
+
+### Kasutajad ja grupid
+![Kasutajad](screenshots/06_kasutajad.png)
 
 ### Statistikavaade
-<!-- ![Statistika](screenshots/stats.png) -->
+![Statistika](screenshots/07_statistika.png)
+
+### Vaataja roll (nupud peidetud)
+![Viewer](screenshots/08_viewer_broneeringud.png)

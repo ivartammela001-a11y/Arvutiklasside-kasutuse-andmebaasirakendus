@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import db from "../db";
+import pool from "../db";
 import { layout } from "../views/layout";
 import { isAdmin } from "../middleware/auth";
 
@@ -10,10 +10,10 @@ function rq(c: any): string {
 }
 
 // LIST
-userRoutes.get("/", (c) => {
+userRoutes.get("/", async (c) => {
   const role = c.get("role");
   const msg = c.req.query("msg");
-  const users = db.query("SELECT * FROM user_or_group ORDER BY role, name").all() as any[];
+  const [users] = await pool.query("SELECT * FROM user_or_group ORDER BY role, name");
 
   let msgHtml = "";
   if (msg === "created") msgHtml = `<div class="alert alert-success">Kasutaja edukalt lisatud!</div>`;
@@ -27,9 +27,9 @@ userRoutes.get("/", (c) => {
     return r;
   };
 
-  const rows = users
+  const rows = (users as any[])
     .map(
-      (u: any) => `
+      (u) => `
     <tr id="user-${u.id}">
       <td>${u.name}</td>
       <td>${u.email || "-"}</td>
@@ -55,7 +55,7 @@ userRoutes.get("/", (c) => {
         ${isAdmin(c) ? `<a href="/users/new${rq(c)}" class="btn btn-success">+ Lisa uus</a>` : ""}
       </div>
       ${
-        users.length === 0
+        (users as any[]).length === 0
           ? `<p class="empty">Kasutajaid ei leitud.</p>`
           : `<table>
         <thead><tr><th>Nimi</th><th>E-post</th><th>Roll</th><th>Loodud</th><th>Tegevused</th></tr></thead>
@@ -71,7 +71,6 @@ userRoutes.get("/", (c) => {
 userRoutes.get("/new", (c) => {
   const role = c.get("role");
   if (!isAdmin(c)) return c.redirect(`/users${rq(c)}`);
-
   const content = `
     <div class="card">
       <h2>Uus kasutaja</h2>
@@ -92,7 +91,6 @@ userRoutes.get("/new", (c) => {
         </div>
       </form>
     </div>`;
-
   return c.html(layout("Uus kasutaja", content, role));
 });
 
@@ -100,11 +98,8 @@ userRoutes.get("/new", (c) => {
 userRoutes.post("/", async (c) => {
   if (!isAdmin(c)) return c.redirect(`/users${rq(c)}`);
   const body = await c.req.parseBody();
-
   try {
-    db.query(
-      "INSERT INTO user_or_group (name, email, role) VALUES (?, ?, ?)"
-    ).run(String(body.name), body.email ? String(body.email) : null, String(body.role));
+    await pool.query("INSERT INTO user_or_group (name, email, role) VALUES (?, ?, ?)", [String(body.name), body.email ? String(body.email) : null, String(body.role)]);
     return c.redirect(`/users${rq(c)}&msg=created`);
   } catch (e: any) {
     return c.redirect(`/users/new${rq(c)}&error=${encodeURIComponent(e.message)}`);
@@ -112,12 +107,12 @@ userRoutes.post("/", async (c) => {
 });
 
 // EDIT
-userRoutes.get("/:id/edit", (c) => {
+userRoutes.get("/:id/edit", async (c) => {
   const role = c.get("role");
   if (!isAdmin(c)) return c.redirect(`/users${rq(c)}`);
-
   const id = c.req.param("id");
-  const user = db.query("SELECT * FROM user_or_group WHERE id = ?").get(id) as any;
+  const [rows] = await pool.query("SELECT * FROM user_or_group WHERE id = ?", [id]);
+  const user = (rows as any[])[0];
   if (!user) return c.redirect(`/users${rq(c)}`);
 
   const content = `
@@ -140,7 +135,6 @@ userRoutes.get("/:id/edit", (c) => {
         </div>
       </form>
     </div>`;
-
   return c.html(layout("Muuda kasutajat", content, role));
 });
 
@@ -149,11 +143,8 @@ userRoutes.post("/:id/edit", async (c) => {
   if (!isAdmin(c)) return c.redirect(`/users${rq(c)}`);
   const id = c.req.param("id");
   const body = await c.req.parseBody();
-
   try {
-    db.query(
-      "UPDATE user_or_group SET name = ?, email = ?, role = ? WHERE id = ?"
-    ).run(String(body.name), body.email ? String(body.email) : null, String(body.role), id);
+    await pool.query("UPDATE user_or_group SET name=?, email=?, role=? WHERE id=?", [String(body.name), body.email ? String(body.email) : null, String(body.role), id]);
     return c.redirect(`/users${rq(c)}&msg=updated`);
   } catch (e: any) {
     return c.redirect(`/users/${id}/edit${rq(c)}&error=${encodeURIComponent(e.message)}`);
@@ -161,10 +152,10 @@ userRoutes.post("/:id/edit", async (c) => {
 });
 
 // DELETE
-userRoutes.post("/:id/delete", (c) => {
+userRoutes.post("/:id/delete", async (c) => {
   if (!isAdmin(c)) return c.text("Keelatud", 403);
   const id = c.req.param("id");
-  db.query("DELETE FROM user_or_group WHERE id = ?").run(id);
+  await pool.query("DELETE FROM user_or_group WHERE id = ?", [id]);
   if (c.req.header("HX-Request")) return c.html("");
   return c.redirect(`/users${rq(c)}&msg=deleted`);
 });

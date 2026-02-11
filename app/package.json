@@ -18,6 +18,8 @@
   },
   "dependencies": {
     "fast-xml-parser": "^5.3.5",
-    "hono": "^4.11.9"
+    "hono": "^4.11.9",
+    "mysql2": "^3.17.0",
+    "playwright": "^1.58.2"
   }
 }

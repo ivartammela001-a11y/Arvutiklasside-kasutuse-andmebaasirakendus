@@ -2,81 +2,78 @@
 
 ## Sissejuhatus
 
-Andmebaasi oiguste haldamine (GRANT/REVOKE) on SQL standardi osa, mida toetavad
-toisised andmebaasiserverid nagu MariaDB, PostgreSQL ja Oracle. Oigused
-voimalldavad maarata, millised kasutajad saavad milliseid toiminguid teha.
+Selles projektis kasutatakse MySQL andmebaasi, mis toetab taislikult
+kasutajate, rollide ja oiguste haldamist SQL GRANT/REVOKE lausetega.
 
-## SQLite piirangud
+## Rollid ja kasutajad
 
-Selles projektis kasutatakse SQLite andmebaasi, mis on **serverita** (embedded)
-andmebaas. SQLite **ei toeta** kasutajate, rollide ega GRANT/REVOKE lauseid,
-kuna andmebaasile ligipaaes pohineb failisysteemi oigustel.
+| Kasutaja | Parool | Oigused |
+|----------|--------|---------|
+| `admin_kasutaja` | `Admin_parool_123!` | SELECT, INSERT, UPDATE, DELETE koikidele tabelitele |
+| `vaataja_kasutaja` | `Vaataja_parool_456!` | Ainult SELECT koikidele tabelitele |
 
-Seetottu on oiguste haldamine lahendatud kahel viisil:
+## Oiguste tabel
 
-1. **Teoreetiline demonstratsioon** (`permissions.sql`) - naitab GRANT/REVOKE
-   lauseid MariaDB suuntaksiga
-2. **Rakenduse taseme lahendus** (`app/src/middleware/auth.ts`) - tegelik
-   rollipohine ligipaaesukontroll
-
-## Rollid
-
-| Toiming                  | admin | viewer |
-| ------------------------ | ----- | ------ |
-| Broneeringute vaatamine  | Jah   | Jah    |
-| Broneeringu lisamine     | Jah   | Ei     |
-| Broneeringu muutmine     | Jah   | Ei     |
-| Broneeringu kustutamine  | Jah   | Ei     |
-| Klasside vaatamine       | Jah   | Jah    |
-| Klasside haldamine       | Jah   | Ei     |
-| Kasutajate vaatamine     | Jah   | Jah    |
-| Kasutajate haldamine     | Jah   | Ei     |
-| Statistika vaatamine     | Jah   | Jah    |
+| Toiming                  | admin_kasutaja | vaataja_kasutaja |
+| ------------------------ | -------------- | ---------------- |
+| Broneeringute vaatamine  | Jah            | Jah              |
+| Broneeringu lisamine     | Jah            | Ei               |
+| Broneeringu muutmine     | Jah            | Ei               |
+| Broneeringu kustutamine  | Jah            | Ei               |
+| Klasside vaatamine       | Jah            | Jah              |
+| Klasside haldamine       | Jah            | Ei               |
+| Kasutajate vaatamine     | Jah            | Jah              |
+| Kasutajate haldamine     | Jah            | Ei               |
 
 ## Kuidas testida
 
-### Teoreetiline osa (MariaDB-s)
-
-Kui soovite testida `permissions.sql` faili, kasutage MariaDB serverit:
+### 1. Oiguste skripti kaivitamine
 
 ```bash
-# Logige sisse root kasutajana
-mysql -u root -p
-
-# Kaivitage skript
-SOURCE permissions.sql;
-
-# Kontrollige oigusi
-SHOW GRANTS FOR 'admin_kasutaja'@'localhost';
-SHOW GRANTS FOR 'vaataja_kasutaja'@'localhost';
+mysql -u root < permissions.sql
 ```
 
-### Rakenduse taseme lahendus
+### 2. Oiguste kontroll
 
-Rakenduses saab rolli vahetada URL parameeetriga:
+```bash
+# Vaata admin oigusi
+mysql -u root -e "SHOW GRANTS FOR 'admin_kasutaja'@'localhost';"
 
-```
-http://localhost:3000/bookings?role=admin    -- Taielikud oigused
-http://localhost:3000/bookings?role=viewer   -- Ainult vaatamine
-```
-
-**Admin rolliga:**
-- Nahtavad on "Lisa uus", "Muuda" ja "Kustuta" nupud
-- Saab luua, muuta ja kustutada broneeringuid, klasse ja kasutajaid
-
-**Viewer rolliga:**
-- Nupud "Lisa uus", "Muuda" ja "Kustuta" on peidetud
-- Saab ainult vaadata andmeid ja statistikat
-- POST/DELETE paringud tagastavad HTTP 403 (Keelatud)
-
-## REVOKE naite selgitus
-
-Failis `permissions.sql` on naidatud, kuidas eemaldada vaataja rollilt oigus
-naha kasutajate andmeid:
-
-```sql
-REVOKE SELECT ON user_or_group FROM viewer_role;
+# Vaata vaataja oigusi
+mysql -u root -e "SHOW GRANTS FOR 'vaataja_kasutaja'@'localhost';"
 ```
 
-Parast seda ei saa `vaataja_kasutaja` enam `user_or_group` tabelit parieda.
-Oiguse saab taastada kaesuga `GRANT SELECT ON user_or_group TO viewer_role;`.
+### 3. Testimine admin kasutajaga
+
+```bash
+# Admin saab andmeid lisada
+mysql -u admin_kasutaja -p'Admin_parool_123!' klassiruumid -e "INSERT INTO lesson_type (name) VALUES ('Test');"
+
+# Ja kustutada
+mysql -u admin_kasutaja -p'Admin_parool_123!' klassiruumid -e "DELETE FROM lesson_type WHERE name='Test';"
+```
+
+### 4. Testimine vaataja kasutajaga
+
+```bash
+# Vaataja saab andmeid lugeda
+mysql -u vaataja_kasutaja -p'Vaataja_parool_456!' klassiruumid -e "SELECT * FROM classroom;"
+
+# Vaataja EI saa andmeid lisada (peaks andma vea)
+mysql -u vaataja_kasutaja -p'Vaataja_parool_456!' klassiruumid -e "INSERT INTO classroom (name, building, capacity) VALUES ('Test', 'Test', 10);"
+# ERROR 1142 (42000): INSERT command denied to user 'vaataja_kasutaja'@'localhost' for table 'classroom'
+```
+
+### 5. REVOKE naite
+
+```bash
+# Eemaldame vaatajalt user_or_group tabeli lugemise oiguse
+mysql -u root -e "REVOKE SELECT ON klassiruumid.user_or_group FROM 'vaataja_kasutaja'@'localhost'; FLUSH PRIVILEGES;"
+
+# Kontrollime - vaataja ei saa enam kasutajaid naha
+mysql -u vaataja_kasutaja -p'Vaataja_parool_456!' klassiruumid -e "SELECT * FROM user_or_group;"
+# ERROR 1142 (42000): SELECT command denied
+
+# Taastame oiguse
+mysql -u root -e "GRANT SELECT ON klassiruumid.user_or_group TO 'vaataja_kasutaja'@'localhost'; FLUSH PRIVILEGES;"
+```

@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import db from "../db";
+import pool from "../db";
 import { layout } from "../views/layout";
 import { isAdmin } from "../middleware/auth";
 
@@ -10,21 +10,19 @@ function rq(c: any): string {
 }
 
 // LIST
-classroomRoutes.get("/", (c) => {
+classroomRoutes.get("/", async (c) => {
   const role = c.get("role");
   const msg = c.req.query("msg");
-  const classrooms = db
-    .query("SELECT * FROM classroom ORDER BY building, name")
-    .all() as any[];
+  const [classrooms] = await pool.query("SELECT * FROM classroom ORDER BY building, name");
 
   let msgHtml = "";
   if (msg === "created") msgHtml = `<div class="alert alert-success">Klass edukalt lisatud!</div>`;
   if (msg === "updated") msgHtml = `<div class="alert alert-success">Klass edukalt muudetud!</div>`;
   if (msg === "deleted") msgHtml = `<div class="alert alert-success">Klass kustutatud!</div>`;
 
-  const rows = classrooms
+  const rows = (classrooms as any[])
     .map(
-      (cl: any) => `
+      (cl) => `
     <tr id="classroom-${cl.id}">
       <td>${cl.name}</td>
       <td>${cl.building}</td>
@@ -52,7 +50,7 @@ classroomRoutes.get("/", (c) => {
         ${isAdmin(c) ? `<a href="/classrooms/new${rq(c)}" class="btn btn-success">+ Lisa uus</a>` : ""}
       </div>
       ${
-        classrooms.length === 0
+        (classrooms as any[]).length === 0
           ? `<p class="empty">Klasse ei leitud.</p>`
           : `<table>
         <thead>
@@ -103,19 +101,10 @@ classroomRoutes.get("/new", (c) => {
 classroomRoutes.post("/", async (c) => {
   if (!isAdmin(c)) return c.redirect(`/classrooms${rq(c)}`);
   const body = await c.req.parseBody();
-
   try {
-    db.query(
-      `INSERT INTO classroom (name, building, floor, capacity, has_projector, has_webcam, description)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      String(body.name),
-      String(body.building),
-      Number(body.floor),
-      Number(body.capacity),
-      Number(body.has_projector),
-      Number(body.has_webcam),
-      String(body.description || "")
+    await pool.query(
+      `INSERT INTO classroom (name, building, floor, capacity, has_projector, has_webcam, description) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [String(body.name), String(body.building), Number(body.floor), Number(body.capacity), Number(body.has_projector), Number(body.has_webcam), String(body.description || "")]
     );
     return c.redirect(`/classrooms${rq(c)}&msg=created`);
   } catch (e: any) {
@@ -124,12 +113,12 @@ classroomRoutes.post("/", async (c) => {
 });
 
 // EDIT
-classroomRoutes.get("/:id/edit", (c) => {
+classroomRoutes.get("/:id/edit", async (c) => {
   const role = c.get("role");
   if (!isAdmin(c)) return c.redirect(`/classrooms${rq(c)}`);
-
   const id = c.req.param("id");
-  const cl = db.query("SELECT * FROM classroom WHERE id = ?").get(id) as any;
+  const [rows] = await pool.query("SELECT * FROM classroom WHERE id = ?", [id]);
+  const cl = (rows as any[])[0];
   if (!cl) return c.redirect(`/classrooms${rq(c)}`);
 
   const content = `
@@ -145,8 +134,8 @@ classroomRoutes.get("/:id/edit", (c) => {
           <div><label>Kohtade arv *</label><input type="number" name="capacity" min="1" value="${cl.capacity}" required></div>
         </div>
         <div class="form-row">
-          <div><label>Projektor</label><select name="has_projector"><option value="0" ${cl.has_projector === 0 ? "selected" : ""}>Ei</option><option value="1" ${cl.has_projector === 1 ? "selected" : ""}>Jah</option></select></div>
-          <div><label>Veebikaamera</label><select name="has_webcam"><option value="0" ${cl.has_webcam === 0 ? "selected" : ""}>Ei</option><option value="1" ${cl.has_webcam === 1 ? "selected" : ""}>Jah</option></select></div>
+          <div><label>Projektor</label><select name="has_projector"><option value="0" ${!cl.has_projector ? "selected" : ""}>Ei</option><option value="1" ${cl.has_projector ? "selected" : ""}>Jah</option></select></div>
+          <div><label>Veebikaamera</label><select name="has_webcam"><option value="0" ${!cl.has_webcam ? "selected" : ""}>Ei</option><option value="1" ${cl.has_webcam ? "selected" : ""}>Jah</option></select></div>
         </div>
         <label>Kirjeldus</label>
         <textarea name="description" rows="2">${cl.description || ""}</textarea>
@@ -165,15 +154,10 @@ classroomRoutes.post("/:id/edit", async (c) => {
   if (!isAdmin(c)) return c.redirect(`/classrooms${rq(c)}`);
   const id = c.req.param("id");
   const body = await c.req.parseBody();
-
   try {
-    db.query(
-      `UPDATE classroom SET name = ?, building = ?, floor = ?, capacity = ?,
-       has_projector = ?, has_webcam = ?, description = ? WHERE id = ?`
-    ).run(
-      String(body.name), String(body.building), Number(body.floor),
-      Number(body.capacity), Number(body.has_projector), Number(body.has_webcam),
-      String(body.description || ""), id
+    await pool.query(
+      `UPDATE classroom SET name=?, building=?, floor=?, capacity=?, has_projector=?, has_webcam=?, description=? WHERE id=?`,
+      [String(body.name), String(body.building), Number(body.floor), Number(body.capacity), Number(body.has_projector), Number(body.has_webcam), String(body.description || ""), id]
     );
     return c.redirect(`/classrooms${rq(c)}&msg=updated`);
   } catch (e: any) {
@@ -182,10 +166,10 @@ classroomRoutes.post("/:id/edit", async (c) => {
 });
 
 // DELETE
-classroomRoutes.post("/:id/delete", (c) => {
+classroomRoutes.post("/:id/delete", async (c) => {
   if (!isAdmin(c)) return c.text("Keelatud", 403);
   const id = c.req.param("id");
-  db.query("DELETE FROM classroom WHERE id = ?").run(id);
+  await pool.query("DELETE FROM classroom WHERE id = ?", [id]);
   if (c.req.header("HX-Request")) return c.html("");
   return c.redirect(`/classrooms${rq(c)}&msg=deleted`);
 });
