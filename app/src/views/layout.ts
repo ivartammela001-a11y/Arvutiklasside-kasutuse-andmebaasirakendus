@@ -1,7 +1,7 @@
 import { html, raw } from "hono/html";
 import type { HtmlEscapedString } from "hono/utils/html";
 
-export const layout = (title: string, content: string, role: string = "viewer"): HtmlEscapedString =>
+export const layout = (title: string, content: string, role: string = "viewer", qs: string = ""): HtmlEscapedString =>
   html`<!DOCTYPE html>
 <html lang="et">
 <head>
@@ -36,6 +36,9 @@ export const layout = (title: string, content: string, role: string = "viewer"):
         .alert { padding: 0.75rem 1rem; border-radius: 4px; margin-bottom: 1rem; }
         .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
         .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .note { padding: 0.7rem 0.9rem; border-radius: 6px; background: #f4f7fb; color: #2c3e50; border: 1px solid #e6edf5; margin-bottom: 1rem; }
+        .note.neutral { background: #f7f9fb; color: #2c3e50; }
+        .note.success { background: #e9f8ef; color: #1f7a3d; border-color: #cceedd; }
         .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
         .stat-card { text-align: center; padding: 1rem; }
         .stat-card .number { font-size: 2rem; font-weight: bold; color: #2c3e50; }
@@ -47,11 +50,11 @@ export const layout = (title: string, content: string, role: string = "viewer"):
 </head>
 <body>
     <nav>
-        <a href="/">Avaleht</a>
-        <a href="/bookings">Broneeringud</a>
-        <a href="/classrooms">Klassid</a>
-        <a href="/users">Kasutajad</a>
-        <a href="/stats">Statistika</a>
+        <a href="/${qs}">Avaleht</a>
+        <a href="/bookings${qs}">Broneeringud</a>
+        <a href="/classrooms${qs}">Klassid</a>
+        <a href="/users${qs}">Kasutajad</a>
+        <a href="/stats${qs}">Statistika</a>
         <span class="role-badge">${role === "admin" ? "Admin" : "Vaataja"}</span>
     </nav>
     <main>${raw(content)}</main>

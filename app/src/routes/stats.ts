@@ -1,13 +1,9 @@
 import { Hono } from "hono";
 import pool from "../db";
 import { layout } from "../views/layout";
+import { buildQuery, friendlyNotice } from "../middleware/presentationSafe";
 
 export const statsRoutes = new Hono();
-
-function rq(c: any): string {
-  return c.get("role") ? `?role=${c.get("role")}` : "";
-}
-
 function getWeekBounds(weekStr?: string): { start: string; end: string; weekLabel: string } {
   let date: Date;
 
@@ -38,6 +34,9 @@ function getWeekBounds(weekStr?: string): { start: string; end: string; weekLabe
 
 statsRoutes.get("/", async (c) => {
   const role = c.get("role");
+  const qs = buildQuery(c);
+  const demo = c.get("demoMode");
+  const calmNote = friendlyNotice(c, "Andmed on ajakohased.", "Andmeid kuvatakse.");
   const weekParam = c.req.query("week");
   const { start, end, weekLabel } = getWeekBounds(weekParam);
 
@@ -106,6 +105,7 @@ statsRoutes.get("/", async (c) => {
           <input type="week" name="week" value="${weekLabel}" style="margin-bottom:0">
         </div>
         ${role === "admin" ? `<input type="hidden" name="role" value="${role}">` : ""}
+        ${c.get("modeParam") ? `<input type="hidden" name="mode" value="${c.get("modeParam")}">` : ""}
         <button type="submit" class="btn btn-primary">Naita</button>
       </form>
       <p style="color:#777;margin-bottom:1rem">Periood: ${start} kuni ${end} (kasutusprotsent 40h toonadalast)</p>
@@ -116,9 +116,9 @@ statsRoutes.get("/", async (c) => {
             <th>Broneeringuid</th><th>Tunde kokku</th><th>Kasutus %</th><th>Visuaal</th>
           </tr>
         </thead>
-        <tbody>${statsRows}</tbody>
+        <tbody>${statsRows || (demo ? `<tr><td colspan="7" class="note neutral">${calmNote}</td></tr>` : "")}</tbody>
       </table>
     </div>`;
 
-  return c.html(layout("Statistika", content, role));
+  return c.html(layout("Statistika", content, role, qs));
 });

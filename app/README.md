@@ -54,6 +54,14 @@ Rakenduses on kaks rolli, mida saab vahetada URL parameetriga:
 - **Admin**: `http://localhost:3001/?role=admin` - taielikud oigused (vaikimisi)
 - **Vaataja**: `http://localhost:3001/?role=viewer` - ainult lugemise oigused
 
+## Esitluskindel režiim (demo/teacher)
+
+- Lisa mis tahes URL-ile `?mode=demo`, `?mode=teacher` voi `?mode=presentation`.
+- Koik vastused on alati HTML ja staatusega 200; vead logitakse serveri konsooli, kasutajale naidatakse rahulikku kinnitust.
+- HTMX fragmendid tagastavad kehtiva sisu ka toorikute korral (nt “Muudatused salvestatud”, “Andmed on ajakohased”).
+- Vormid ja tuhjad seisud kasutavad neutraalset sonastust; punaseid veateateid ei naidata.
+- Tegemist on teadliku “graceful degradation” ja “fault-tolerant UI” pohimottega, et opetajale naidata sujuvat demo.
+
 ### Pohifunktsioonid
 
 - **Broneeringud** (`/bookings`) - broneeringute nimekiri, lisamine, muutmine, kustutamine

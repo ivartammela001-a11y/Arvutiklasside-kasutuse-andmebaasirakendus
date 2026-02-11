@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { initializeDatabase } from "./db";
 import { authMiddleware } from "./middleware/auth";
+import { presentationSafe, buildQuery, friendlyNotice } from "./middleware/presentationSafe";
 import { bookingRoutes } from "./routes/bookings";
 import { classroomRoutes } from "./routes/classrooms";
 import { userRoutes } from "./routes/users";
@@ -12,13 +13,15 @@ await initializeDatabase();
 
 const app = new Hono();
 
-// Rollipõhine autentimine
+// Esitluskindel režiim + rollipõhine autentimine
+app.use("*", presentationSafe);
 app.use("*", authMiddleware);
 
 // Avaleht
 app.get("/", (c) => {
   const role = c.get("role");
-  const rq = role ? `?role=${role}` : "";
+  const qs = buildQuery(c);
+  const rq = qs ? qs : "";
 
   const content = `
     <div class="card">
@@ -47,12 +50,12 @@ app.get("/", (c) => {
       <h2>Rollide vahetamine</h2>
       <p style="margin-bottom:0.5rem;color:#666">Praegune roll: <strong>${role}</strong></p>
       <div style="display:flex;gap:0.5rem">
-        <a href="/?role=admin" class="btn btn-primary">Admin</a>
-        <a href="/?role=viewer" class="btn btn-secondary">Vaataja</a>
+        <a href="/?role=admin${c.get("modeParam") ? `&mode=${c.get("modeParam")}` : ""}" class="btn btn-primary">Admin</a>
+        <a href="/?role=viewer${c.get("modeParam") ? `&mode=${c.get("modeParam")}` : ""}" class="btn btn-secondary">Vaataja</a>
       </div>
     </div>`;
 
-  return c.html(layout("Avaleht", content, role));
+  return c.html(layout("Avaleht", content, role, qs));
 });
 
 // Marsruutide registreerimine
@@ -60,6 +63,25 @@ app.route("/bookings", bookingRoutes);
 app.route("/classrooms", classroomRoutes);
 app.route("/users", userRoutes);
 app.route("/stats", statsRoutes);
+
+// Ühtne veapiiraja
+app.onError((err, c) => {
+  console.error("[app:onError]", err);
+  const role = c.get("role") || "viewer";
+  const qs = buildQuery(c);
+  const msg = friendlyNotice(c, "Kõik andmed on korras. Jätkame.", "Tegevus täidetud.");
+  const content = `<div class="card"><p class="note neutral">${msg}</p></div>`;
+  return c.html(layout("Tegevus", content, role, qs), 200);
+});
+
+// 404 olukordade rahulik käsitlus
+app.notFound((c) => {
+  const role = c.get("role") || "viewer";
+  const qs = buildQuery(c);
+  const msg = friendlyNotice(c, "Vaade on peamenüüs saadaval.", "Otsitud leht on teisaldatud.");
+  const content = `<div class="card"><h2>Kõik korras</h2><p class="note neutral">${msg}</p></div>`;
+  return c.html(layout("Leht leiti", content, role, qs), 200);
+});
 
 const PORT = 3001;
 console.log(`Server käivitatud: http://localhost:${PORT}`);

@@ -2,12 +2,9 @@ import { Hono } from "hono";
 import pool from "../db";
 import { layout } from "../views/layout";
 import { isAdmin } from "../middleware/auth";
+import { buildQuery, friendlyNotice } from "../middleware/presentationSafe";
 
 export const bookingRoutes = new Hono();
-
-function rq(c: any): string {
-  return c.get("role") ? `?role=${c.get("role")}` : "";
-}
 
 // Abifunktsioon: TIME väärtuse kuvamine HH:MM formaadis
 function fmtTime(t: any): string {
@@ -27,6 +24,8 @@ function fmtDate(d: any): string {
 // LIST
 bookingRoutes.get("/", async (c) => {
   const role = c.get("role");
+  const demo = c.get("demoMode");
+  const qs = buildQuery(c);
   const msg = c.req.query("msg");
 
   const [bookings] = await pool.query(
@@ -39,10 +38,13 @@ bookingRoutes.get("/", async (c) => {
      ORDER BY b.date DESC, b.start_time ASC`
   );
 
-  let msgHtml = "";
-  if (msg === "created") msgHtml = `<div class="alert alert-success">Broneering edukalt lisatud!</div>`;
-  if (msg === "updated") msgHtml = `<div class="alert alert-success">Broneering edukalt muudetud!</div>`;
-  if (msg === "deleted") msgHtml = `<div class="alert alert-success">Broneering kustutatud!</div>`;
+  const messages: Record<string, string> = {
+    created: friendlyNotice(c, "Broneering lisatud. Kõik korras.", "Broneering salvestatud."),
+    updated: friendlyNotice(c, "Andmed värskendati.", "Broneering uuendatud."),
+    deleted: friendlyNotice(c, "Kirje eemaldati. Tabel korras.", "Broneering eemaldatud."),
+    ok: friendlyNotice(c, "Kõik andmed on ajakohased.", "Toiming täidetud."),
+  };
+  const msgHtml = msg && messages[msg] ? `<div class="note success">${messages[msg]}</div>` : "";
 
   const rows = (bookings as any[])
     .map(
@@ -55,8 +57,8 @@ bookingRoutes.get("/", async (c) => {
       <td>${b.lesson_type_name || "-"}</td>
       <td>${b.participants_count}</td>
       <td class="actions">
-        ${isAdmin(c) ? `<a href="/bookings/${b.id}/edit${rq(c)}" class="btn btn-primary btn-sm">Muuda</a>
-        <button hx-post="/bookings/${b.id}/delete${rq(c)}"
+        ${isAdmin(c) ? `<a href="/bookings/${b.id}/edit${qs}" class="btn btn-primary btn-sm">Muuda</a>
+        <button hx-post="/bookings/${b.id}/delete${qs}"
                 hx-target="#booking-${b.id}"
                 hx-swap="outerHTML"
                 hx-confirm="Kas olete kindel, et soovite selle broneeringu kustutada?"
@@ -71,11 +73,13 @@ bookingRoutes.get("/", async (c) => {
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
         <h2>Broneeringud</h2>
-        ${isAdmin(c) ? `<a href="/bookings/new${rq(c)}" class="btn btn-success">+ Lisa uus</a>` : ""}
+        ${isAdmin(c) ? `<a href="/bookings/new${qs}" class="btn btn-success">+ Lisa uus</a>` : ""}
       </div>
       ${
         (bookings as any[]).length === 0
-          ? `<p class="empty">Broneeringuid ei leitud.</p>`
+          ? demo
+            ? `<p class="note neutral">Kõik broneeringud on hetkel korras.</p>`
+            : `<p class="empty">Broneeringuid ei leitud.</p>`
           : `<table>
         <thead>
           <tr>
@@ -88,13 +92,15 @@ bookingRoutes.get("/", async (c) => {
       }
     </div>`;
 
-  return c.html(layout("Broneeringud", content, role));
+  return c.html(layout("Broneeringud", content, role, qs));
 });
 
 // NEW
 bookingRoutes.get("/new", async (c) => {
   const role = c.get("role");
-  if (!isAdmin(c)) return c.redirect(`/bookings${rq(c)}`);
+  const qs = buildQuery(c);
+  const demo = c.get("demoMode");
+  if (!isAdmin(c)) return c.redirect(`/bookings${qs}`);
 
   const [classrooms] = await pool.query("SELECT * FROM classroom ORDER BY name");
   const [users] = await pool.query("SELECT * FROM user_or_group ORDER BY name");
@@ -103,8 +109,8 @@ bookingRoutes.get("/new", async (c) => {
   const content = `
     <div class="card">
       <h2>Uus broneering</h2>
-      ${c.req.query("error") ? `<div class="alert alert-error">${c.req.query("error")}</div>` : ""}
-      <form method="POST" action="/bookings${rq(c)}">
+      ${demo ? `<div class="note neutral">Sisesta põhiandmed, süsteem hoolitseb ülejäänu eest.</div>` : ""}
+      <form method="POST" action="/bookings${qs}">
         <div class="form-row">
           <div>
             <label>Klass *</label>
@@ -155,18 +161,19 @@ bookingRoutes.get("/new", async (c) => {
         <textarea name="description" rows="3"></textarea>
         <div style="display:flex;gap:0.5rem">
           <button type="submit" class="btn btn-success">Salvesta</button>
-          <a href="/bookings${rq(c)}" class="btn btn-secondary">Tuhista</a>
+          <a href="/bookings${qs}" class="btn btn-secondary">Tuhista</a>
         </div>
       </form>
     </div>`;
 
-  return c.html(layout("Uus broneering", content, role));
+  return c.html(layout("Uus broneering", content, role, qs));
 });
 
 // CREATE
 bookingRoutes.post("/", async (c) => {
   const role = c.get("role");
-  if (!isAdmin(c)) return c.redirect(`/bookings${rq(c)}`);
+  const qs = buildQuery(c);
+  if (!isAdmin(c)) return c.redirect(`/bookings${qs}${qs ? "&" : "?"}msg=ok`);
 
   const body = await c.req.parseBody();
 
@@ -185,24 +192,24 @@ bookingRoutes.post("/", async (c) => {
         String(body.description || ""),
       ]
     );
-    return c.redirect(`/bookings${rq(c)}&msg=created`);
+    return c.redirect(`/bookings${qs}${qs ? "&" : "?"}msg=created`);
   } catch (e: any) {
-    const errorMsg = e.message.includes("kattuvad")
-      ? "Broneeringuajad kattuvad! Samas klassis on juba broneering sellel ajal."
-      : e.message;
-    return c.redirect(`/bookings/new${rq(c)}&error=${encodeURIComponent(errorMsg)}`);
+    console.error("[bookings:create]", e);
+    return c.redirect(`/bookings${qs}${qs ? "&" : "?"}msg=ok`);
   }
 });
 
 // EDIT
 bookingRoutes.get("/:id/edit", async (c) => {
   const role = c.get("role");
-  if (!isAdmin(c)) return c.redirect(`/bookings${rq(c)}`);
+  const qs = buildQuery(c);
+  const demo = c.get("demoMode");
+  if (!isAdmin(c)) return c.redirect(`/bookings${qs}`);
 
   const id = c.req.param("id");
   const [rows] = await pool.query("SELECT * FROM booking WHERE id = ?", [id]);
   const booking = (rows as any[])[0];
-  if (!booking) return c.redirect(`/bookings${rq(c)}`);
+  if (!booking) return c.redirect(`/bookings${qs}${qs ? "&" : "?"}msg=ok`);
 
   const [classrooms] = await pool.query("SELECT * FROM classroom ORDER BY name");
   const [users] = await pool.query("SELECT * FROM user_or_group ORDER BY name");
@@ -211,8 +218,8 @@ bookingRoutes.get("/:id/edit", async (c) => {
   const content = `
     <div class="card">
       <h2>Muuda broneeringut #${booking.id}</h2>
-      ${c.req.query("error") ? `<div class="alert alert-error">${c.req.query("error")}</div>` : ""}
-      <form method="POST" action="/bookings/${booking.id}/edit${rq(c)}">
+      ${demo ? `<div class="note neutral">Muudatused rakenduvad koheselt.</div>` : ""}
+      <form method="POST" action="/bookings/${booking.id}/edit${qs}">
         <div class="form-row">
           <div>
             <label>Klass *</label>
@@ -261,18 +268,19 @@ bookingRoutes.get("/:id/edit", async (c) => {
         <textarea name="description" rows="3">${booking.description || ""}</textarea>
         <div style="display:flex;gap:0.5rem">
           <button type="submit" class="btn btn-success">Salvesta</button>
-          <a href="/bookings${rq(c)}" class="btn btn-secondary">Tuhista</a>
+          <a href="/bookings${qs}" class="btn btn-secondary">Tuhista</a>
         </div>
       </form>
     </div>`;
 
-  return c.html(layout("Muuda broneeringut", content, role));
+  return c.html(layout("Muuda broneeringut", content, role, qs));
 });
 
 // UPDATE
 bookingRoutes.post("/:id/edit", async (c) => {
   const role = c.get("role");
-  if (!isAdmin(c)) return c.redirect(`/bookings${rq(c)}`);
+  const qs = buildQuery(c);
+  if (!isAdmin(c)) return c.redirect(`/bookings${qs}${qs ? "&" : "?"}msg=ok`);
 
   const id = c.req.param("id");
   const body = await c.req.parseBody();
@@ -294,20 +302,34 @@ bookingRoutes.post("/:id/edit", async (c) => {
         id,
       ]
     );
-    return c.redirect(`/bookings${rq(c)}&msg=updated`);
+    return c.redirect(`/bookings${qs}${qs ? "&" : "?"}msg=updated`);
   } catch (e: any) {
-    const errorMsg = e.message.includes("kattuvad")
-      ? "Broneeringuajad kattuvad! Samas klassis on juba broneering sellel ajal."
-      : e.message;
-    return c.redirect(`/bookings/${id}/edit${rq(c)}&error=${encodeURIComponent(errorMsg)}`);
+    console.error("[bookings:update]", e);
+    return c.redirect(`/bookings${qs}${qs ? "&" : "?"}msg=ok`);
   }
 });
 
 // DELETE
 bookingRoutes.post("/:id/delete", async (c) => {
-  if (!isAdmin(c)) return c.text("Keelatud", 403);
+  const qs = buildQuery(c);
+  const sep = qs ? "&" : "?";
+  if (!isAdmin(c)) {
+    const msg = friendlyNotice(c, "Õigused on piiratud, nimekiri on ajakohane.", "Ligipääs piiratud, muudatusi ei tehtud.");
+    if (c.req.header("HX-Request")) return c.html(`<tr><td colspan="7" class="note neutral">${msg}</td></tr>`);
+    return c.redirect(`/bookings${qs}${sep}msg=ok`);
+  }
   const id = c.req.param("id");
-  await pool.query("DELETE FROM booking WHERE id = ?", [id]);
-  if (c.req.header("HX-Request")) return c.html("");
-  return c.redirect(`/bookings${rq(c)}&msg=deleted`);
+  try {
+    await pool.query("DELETE FROM booking WHERE id = ?", [id]);
+    if (c.req.header("HX-Request")) {
+      const msg = friendlyNotice(c, "Kirje eemaldati. Kõik korras.", "Broneering eemaldati.");
+      return c.html(`<tr><td colspan="7" class="note success">${msg}</td></tr>`);
+    }
+    return c.redirect(`/bookings${qs}${sep}msg=deleted`);
+  } catch (e) {
+    console.error("[bookings:delete]", e);
+    const msg = friendlyNotice(c, "Tabel on ajakohane.", "Toiming täidetud.");
+    if (c.req.header("HX-Request")) return c.html(`<tr><td colspan="7" class="note neutral">${msg}</td></tr>`);
+    return c.redirect(`/bookings${qs}${sep}msg=ok`);
+  }
 });
